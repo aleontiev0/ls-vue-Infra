@@ -9,6 +9,8 @@
 #  CloudFront deployment takes 15-20 minutes
 #  The certificate must be requested in us-east-1 region for CloudFront
 #  You'll need to validate the SSL certificate through DNS records in the ACM console
+#  !!!CloudFront requires the ACM cert to be in us-east-1 regardless of where the bucket lives!!.
+CERT_REGION=us-east-1
 
 #set -e  # Exit on any error
 
@@ -130,7 +132,7 @@ ensure_static_website_bucket "$APP_BUCKET_NAME" "$REGION"
 # Check if certificate already exists
 echo "5. Checking if there is already the SSL certificate..."
 
-EXISTING_CERT=$(aws acm list-certificates --region us-east-1 --query "CertificateSummaryList[?DomainName=='$DOMAIN_NAME'].CertificateArn" --output text)
+EXISTING_CERT=$(aws acm list-certificates --region $CERT_REGION --query "CertificateSummaryList[?DomainName=='$DOMAIN_NAME'].CertificateArn" --output text)
 
 if [ -n "$EXISTING_CERT" ]; then
     echo "Using existing certificate: $EXISTING_CERT"
@@ -141,7 +143,7 @@ else
     --domain-name "$DOMAIN_NAME" \
     --subject-alternative-names "www.$DOMAIN_NAME" "$APP_SUBDOMAIN" \
     --validation-method DNS \
-    --region us-east-1 \
+    --region $CERT_REGION \
     --query 'CertificateArn' \
     --output text)
 echo "   Certificate requested: $CERT_ARN"
@@ -233,7 +235,7 @@ echo "   CloudFront domain: $CLOUDFRONT_DOMAIN"
 ########### Now the cloudfront work for the app sub-domain:
 
 echo "6. Creating CloudFront distribution..."
-APP_WEBSITE_ENDPOINT="$BUCKET_NAME.s3-website-$REGION.amazonaws.com"
+APP_WEBSITE_ENDPOINT="$APP_BUCKET_NAME.s3-website-$REGION.amazonaws.com"
 
 # Check if distribution already exists
 APP_EXISTING_DISTRIBUTION=$(aws cloudfront list-distributions \
@@ -261,7 +263,7 @@ cat > /tmp/app-distribution-config.json << EOF
         "Items": [
             {
                 "Id": "$APP_BUCKET_NAME",
-                "DomainName": "$APP_BUCKET_NAME.s3-website-us-east-1.amazonaws.com",
+                "DomainName": "$APP_WEBSITE_ENDPOINT",
                 "CustomOriginConfig": {
                     "HTTPPort": 80,
                     "HTTPSPort": 443,
